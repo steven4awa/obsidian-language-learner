@@ -12,7 +12,7 @@ if you want to view the source, please visit the github repository of this plugi
 
 const prod = (process.argv[2] === 'production');
 
-await esbuild.build({
+const buildOptions = {
     banner: {
         js: banner,
     },
@@ -47,23 +47,31 @@ await esbuild.build({
         '@codemirror/view',
         ...builtins],
     format: 'cjs',
-    watch: !prod,
     target: 'es2016',
     logLevel: "info",
     sourcemap: prod ? false : 'inline',
     minify: prod ? true : false,
     treeShaking: true,
     outfile: 'main.js',
-}).catch(() => process.exit(1));
+};
 
-await esbuild.build({
+const cssBuildOptions = {
     entryPoints: ["./src/main.css"],
     outfile: "styles.css",
-    watch: !prod,
     bundle: true,
     allowOverwrite: true,
     minify: false,
-});
+};
+
+if (prod) {
+    await esbuild.build(buildOptions).catch(() => process.exit(1));
+    await esbuild.build(cssBuildOptions);
+} else {
+    const ctx = await esbuild.context(buildOptions);
+    await ctx.watch();
+    const cssCtx = await esbuild.context(cssBuildOptions);
+    await cssCtx.watch();
+}
 
 // if (!prod) {
 // 	fs.rm("./main.css", () => {

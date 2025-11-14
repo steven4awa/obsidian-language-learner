@@ -90,7 +90,11 @@
   padding: 0;
   border: none;
   box-shadow: none;
-  background: linear-gradient(var(--13dedc3a-bgRGBA1) 40%, var(--13dedc3a-bgRGBA2) 60%, var(--13dedc3a-bgRGBA3) 100%);
+  background:
+    linear-gradient(
+      var(--13dedc3a-bgRGBA1) 40%,
+      var(--13dedc3a-bgRGBA2) 60%,
+      var(--13dedc3a-bgRGBA3) 100%);
   cursor: pointer;
 }
 .dict-item .dict-item-body .fold-mask .fold-mask-arrow {
@@ -139,10 +143,7 @@
 #youdao h1,
 #youdao h2,
 #youdao h3,
-#youdao h4 {
-  margin-top: .2em;
-  margin-bottom: .2em;
-}
+#youdao h4,
 #youdao p {
   margin-top: .2em;
   margin-bottom: .2em;
@@ -175,7 +176,7 @@
 }
 #youdao .discrimination .title {
   font-size: 1.2em;
-  font-weight: bold;
+  font-weight: 700;
 }
 #youdao .discrimination .wordGroup {
   margin-left: 10px;
@@ -594,15 +595,13 @@
   font-style: italic;
 }
 .word-more .word-sens .word-sen p:first-child em {
-  font-weight: bold;
+  font-weight: 700;
   color: var(--interactive-accent);
 }
 #langr-data #data-tags {
   display: flex;
 }
-#langr-data .n-data-table-filter {
-  width: 19px;
-}
+#langr-data .n-data-table-filter,
 #langr-data .n-data-table-th--filterable {
   width: 19px;
 }
