@@ -9,6 +9,7 @@ export default {
     "Search word": "Search word",
     "Refresh Word Database": "Refresh Word Database",
     "Refresh Review Database": "Refresh Review Database",
+    "Insert Phonetic Symbol": "Insert Phonetic Symbol",
 
     // DataPanelView.ts
     "Data Panel": "Data Panel",

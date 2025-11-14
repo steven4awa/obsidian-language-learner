@@ -9,6 +9,7 @@ export default {
     "Search word": "查詢單字/片語",
     "Refresh Word Database": "重新整理單字資料庫",
     "Refresh Review Database": "重新整理復習資料庫",
+    "Insert Phonetic Symbol": "插入音標",
 
     // DataPanelView.ts
     "Data Panel": "單字列表",

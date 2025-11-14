@@ -27,6 +27,7 @@ import { LocalDb } from "./db/local_db";
 import { TextParser } from "./views/parser";
 import { FrontMatterManager } from "./utils/frontmatter";
 import Server from "./api/server";
+import { search as youdaoSearch } from "./dictionary/youdao/engine";
 
 import { DEFAULT_SETTINGS, MyPluginSettings, SettingTab } from "./settings";
 import store from "./store";
@@ -244,6 +245,11 @@ export default class LanguageLearner extends Plugin {
         );
         this.addRibbonIcon(DATA_ICON, t("Data Panel"), async (evt) => {
             this.activateView(DATA_PANEL_VIEW, "tab");
+        });
+
+        // 添加音标查询按钮
+        this.addRibbonIcon("volume-2", t("Insert Phonetic Symbol"), async (evt) => {
+            await this.insertPhoneticSymbol();
         });
     }
 
@@ -595,6 +601,160 @@ export default class LanguageLearner extends Plugin {
 
     async saveSettings() {
         await this.saveData(this.settings);
+    }
+
+    async insertPhoneticSymbol() {
+        // 获取当前活动的 Markdown 视图
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!activeView) {
+            new Notice("Please open a Markdown file first");
+            return;
+        }
+
+        const file = activeView.file;
+        if (!file) {
+            new Notice("No file is open");
+            return;
+        }
+
+        // 获取选中的文本（支持编辑模式和预览模式，包括 header）
+        let word = "";
+        
+        // 首先尝试从编辑器获取选中文本（编辑模式）
+        const editor = activeView.editor;
+        if (editor) {
+            word = editor.getSelection().trim();
+        }
+        
+        // 如果没有选中文本，尝试从全局选择获取（预览模式或任何位置）
+        if (!word) {
+            word = window.getSelection()?.toString().trim() || "";
+        }
+        
+        if (!word) {
+            new Notice("Please select a word first");
+            return;
+        }
+
+        // 清理单词（移除多余空格）
+        word = word.replace(/\s+/g, ' ').trim();
+
+        try {
+            new Notice(`Querying phonetic symbol for: ${word}...`);
+            
+            // 查询有道词典
+            const result = await youdaoSearch(word);
+            
+            if (!result || !result.result || result.result.type !== 'lex') {
+                new Notice("No phonetic symbol found");
+                return;
+            }
+
+            const lexResult = result.result;
+            
+            // 提取音标（优先使用美式音标，如果没有则使用英式音标）
+            let phonetic = "";
+            if (lexResult.prons && lexResult.prons.length > 0) {
+                // 查找美式音标
+                const usPron = lexResult.prons.find((p: { phsym: string; url: string }) => p.phsym.includes('美'));
+                // 查找英式音标
+                const ukPron = lexResult.prons.find((p: { phsym: string; url: string }) => p.phsym.includes('英'));
+                
+                // 优先使用美式，如果没有则使用英式，如果都没有则使用第一个
+                const selectedPron = usPron || ukPron || lexResult.prons[0];
+                
+                // 从 phsym 中提取音标（格式可能是 "美 /ˈɪnstrəmənt/" 或 "英 /ˈɪnstrəmənt/" 或 "美 [ˈmjuːzɪk(ə)l]"）
+                // 先尝试匹配 /音标/ 格式
+                let match = selectedPron.phsym.match(/\/([^\/]+)\//);
+                if (match && match[1]) {
+                    phonetic = match[1].trim();
+                } else {
+                    // 如果没有 /音标/ 格式，尝试匹配 [音标] 格式
+                    match = selectedPron.phsym.match(/\[([^\]]+)\]/);
+                    if (match && match[1]) {
+                        phonetic = match[1].trim();
+                    } else {
+                        // 如果都没有，尝试提取所有斜杠或方括号之间的内容
+                        const slashMatch = selectedPron.phsym.match(/\/([^\/]+)\//);
+                        const bracketMatch = selectedPron.phsym.match(/\[([^\]]+)\]/);
+                        if (slashMatch && slashMatch[1]) {
+                            phonetic = slashMatch[1].trim();
+                        } else if (bracketMatch && bracketMatch[1]) {
+                            phonetic = bracketMatch[1].trim();
+                        }
+                    }
+                }
+                
+                // 清理音标：移除所有中文字符、空格和多余字符
+                phonetic = phonetic.replace(/[\u4e00-\u9fa5\s]/g, '').trim();
+            }
+
+            if (!phonetic) {
+                new Notice("No phonetic symbol found");
+                return;
+            }
+
+            // 读取文件内容
+            let content = await this.app.vault.read(file);
+            
+            // 查找 YAML frontmatter 的结束位置
+            const yamlMatch = content.match(/^---\n([\s\S]+?)\n---(\n|$)/);
+            let insertPosition = 0;
+            
+            if (yamlMatch) {
+                // 如果有 YAML，在 YAML 后面插入（包括换行符）
+                insertPosition = yamlMatch[0].length;
+            } else {
+                // 如果没有 YAML，在文件开头插入
+                insertPosition = 0;
+            }
+
+            // 构建要插入的音标文本（格式：*/音标/*）
+            const phoneticText = `*/${phonetic}/*\n`;
+            
+            // 检查是否已经存在该单词的音标（避免重复插入）
+            const lines = content.split('\n');
+            const yamlLineCount = yamlMatch ? yamlMatch[0].split('\n').length : 0;
+            const afterYamlLines = yamlLineCount > 0 
+                ? lines.slice(yamlLineCount)
+                : lines;
+            
+            // 检查是否已经有相同的音标（匹配 */音标/* 或 **/音标/** 格式）
+            const escapedPhonetic = phonetic.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const existingPhoneticPattern = new RegExp(`\\*/${escapedPhonetic}/\\*|\\*\\*/${escapedPhonetic}/\\*\\*`);
+            const hasExisting = afterYamlLines.some(line => existingPhoneticPattern.test(line));
+            
+            if (hasExisting) {
+                new Notice(`Phonetic symbol */${phonetic}/* already exists`);
+                return;
+            }
+
+            // 插入音标
+            const beforeText = content.substring(0, insertPosition);
+            const afterText = content.substring(insertPosition);
+            
+            // 确保在 YAML 后面有换行，然后插入音标
+            let newContent: string;
+            if (yamlMatch) {
+                // 如果 YAML 后面已经有换行，直接插入；否则添加一个换行
+                if (afterText.startsWith('\n')) {
+                    newContent = beforeText + phoneticText + afterText;
+                } else {
+                    newContent = beforeText + '\n' + phoneticText + afterText;
+                }
+            } else {
+                // 如果没有 YAML，在开头插入
+                newContent = phoneticText + (afterText.startsWith('\n') ? '' : '\n') + afterText;
+            }
+            
+            // 写入文件
+            await this.app.vault.modify(file, newContent);
+            
+            new Notice(`Phonetic symbol inserted: */${phonetic}/*`);
+        } catch (error) {
+            console.error("Error querying phonetic symbol:", error);
+            new Notice("Failed to query phonetic symbol");
+        }
     }
 
     async activateView(VIEW_TYPE: string, side: "left" | "right" | "tab") {
