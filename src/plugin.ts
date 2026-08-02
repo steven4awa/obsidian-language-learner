@@ -221,6 +221,21 @@ export default class LanguageLearner extends Plugin {
                 this.insertNewLineWithQuote(editor);
             },
         });
+
+        // 添加插入音标命令
+        this.addCommand({
+            id: "langr-insert-phonetic-symbol",
+            name: t("Insert Phonetic Symbol"),
+            hotkeys: [
+                {
+                    modifiers: ["Mod", "Shift"],
+                    key: "P",
+                },
+            ],
+            callback: () => {
+                this.insertPhoneticSymbol();
+            },
+        });
     }
 
     insertNewLineWithQuote(editor: Editor) {
